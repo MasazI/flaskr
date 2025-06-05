@@ -144,6 +144,49 @@ class TestFlaskr:
             # the database state is not guaranteed. In a real-world scenario,
             # you might want to set up a known database state before running this test.
 
+    def test_remove_entry(self):
+        """
+        Test the remove_entry function to ensure it correctly removes an entry from the database.
+        """
+        with app.test_client() as client:
+            # First, log in
+            auth = AuthActions(client)
+            auth.login()
+            
+            # Add a test entry
+            response = client.post('/add', data={
+                'title': 'Test Entry to Remove',
+                'text': 'This entry will be removed'
+            }, follow_redirects=True)
+            assert b'New entry was successfully posted' in response.data
+            
+            # Get the ID of the entry we just added
+            with app.app_context():
+                db = get_db()
+                entry = db.execute('SELECT id FROM entries WHERE title = ?', 
+                                  ['Test Entry to Remove']).fetchone()
+                assert entry is not None
+                entry_id = entry['id']
+            
+            # Remove the entry
+            response = client.post(f'/remove/{entry_id}', follow_redirects=True)
+            assert b'Entry was successfully removed' in response.data
+            
+            # Verify the entry is no longer in the database
+            with app.app_context():
+                db = get_db()
+                entry = db.execute('SELECT id FROM entries WHERE id = ?', 
+                                  [entry_id]).fetchone()
+                assert entry is None
+
+    def test_remove_entry_unauthorized(self):
+        """
+        Test that an unauthorized user cannot remove entries.
+        """
+        with app.test_client() as client:
+            # Try to remove an entry without logging in
+            response = client.post('/remove/1', follow_redirects=True)
+            assert response.status_code == 401  # Unauthorized
 
 
 class AuthActions(object):
